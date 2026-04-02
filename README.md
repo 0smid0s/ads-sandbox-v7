@@ -1,5 +1,18 @@
 # bino_att — Canva Account Automation
-
+docker build -t quay.io/mylastres0rt05/tor-proxy:latest tor-proxy/ && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.44.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.44 . && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.43.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.43 . && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.42.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.42 . && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.41.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.41 . && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.40.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.40 . && \
+docker build --build-arg PLAYWRIGHT_TAG=v1.39.0-jammy -t quay.io/mylastres0rt05/thor-session:v1.39 . && \
+docker push quay.io/mylastres0rt05/tor-proxy:latest && \
+docker push quay.io/mylastres0rt05/thor-session:v1.44 && \
+docker push quay.io/mylastres0rt05/thor-session:v1.43 && \
+docker push quay.io/mylastres0rt05/thor-session:v1.42 && \
+docker push quay.io/mylastres0rt05/thor-session:v1.41 && \
+docker push quay.io/mylastres0rt05/thor-session:v1.40 && \
+docker push quay.io/mylastres0rt05/thor-session:v1.39 2>&1 | tail -20 
 Automates Canva account creation via email verification, using rotating proxies and anti-detection techniques.
 
 ## Project Files
