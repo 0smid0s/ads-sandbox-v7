@@ -1,0 +1,24 @@
+name: Sync forks
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Push to forks
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          for fork in ${{ secrets.FORK_REPOS }}; do
+            git remote add fork_target "https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/$fork.git" 2>/dev/null || true
+            git push fork_target HEAD:main --force
+            git remote remove fork_target
+          done
