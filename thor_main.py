@@ -1,6 +1,6 @@
 import random, os, string, sys
 import argparse
-import socket
+import atexit
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
@@ -68,21 +68,49 @@ def get_ip_info(proxy_url: str = None, retries: int = 6, delay: int = 5) -> dict
     return {}
 
 CC_LANG = {
-    "US": ("en-US", "America/New_York",    "en-US,en;q=0.9"),
-    "GB": ("en-GB", "Europe/London",       "en-GB,en;q=0.9"),
-    "IT": ("it-IT", "Europe/Rome",         "it-IT,it;q=0.9,en;q=0.8"),
-    "DE": ("de-DE", "Europe/Berlin",       "de-DE,de;q=0.9,en;q=0.8"),
-    "FR": ("fr-FR", "Europe/Paris",        "fr-FR,fr;q=0.9,en;q=0.8"),
-    "ES": ("es-ES", "Europe/Madrid",       "es-ES,es;q=0.9,en;q=0.8"),
-    "NL": ("nl-NL", "Europe/Amsterdam",    "nl-NL,nl;q=0.9,en;q=0.8"),
-    "PL": ("pl-PL", "Europe/Warsaw",       "pl-PL,pl;q=0.9,en;q=0.8"),
-    "BR": ("pt-BR", "America/Sao_Paulo",   "pt-BR,pt;q=0.9,en;q=0.8"),
-    "RU": ("ru-RU", "Europe/Moscow",       "ru-RU,ru;q=0.9,en;q=0.8"),
-    "TR": ("tr-TR", "Europe/Istanbul",     "tr-TR,tr;q=0.9,en;q=0.8"),
-    "JP": ("ja-JP", "Asia/Tokyo",          "ja-JP,ja;q=0.9,en;q=0.8"),
-    "CN": ("zh-CN", "Asia/Shanghai",       "zh-CN,zh;q=0.9,en;q=0.8"),
-    "SE": ("sv-SE", "Europe/Stockholm",    "sv-SE,sv;q=0.9,en;q=0.8"),
-    "MX": ("es-MX", "America/Mexico_City", "es-MX,es;q=0.9,en;q=0.8"),
+    "US": ("en-US", "America/New_York",      "en-US,en;q=0.9"),
+    "GB": ("en-GB", "Europe/London",         "en-GB,en;q=0.9"),
+    "IT": ("it-IT", "Europe/Rome",           "it-IT,it;q=0.9,en;q=0.8"),
+    "DE": ("de-DE", "Europe/Berlin",         "de-DE,de;q=0.9,en;q=0.8"),
+    "FR": ("fr-FR", "Europe/Paris",          "fr-FR,fr;q=0.9,en;q=0.8"),
+    "ES": ("es-ES", "Europe/Madrid",         "es-ES,es;q=0.9,en;q=0.8"),
+    "NL": ("nl-NL", "Europe/Amsterdam",      "nl-NL,nl;q=0.9,en;q=0.8"),
+    "PL": ("pl-PL", "Europe/Warsaw",         "pl-PL,pl;q=0.9,en;q=0.8"),
+    "BR": ("pt-BR", "America/Sao_Paulo",     "pt-BR,pt;q=0.9,en;q=0.8"),
+    "RU": ("ru-RU", "Europe/Moscow",         "ru-RU,ru;q=0.9,en;q=0.8"),
+    "TR": ("tr-TR", "Europe/Istanbul",       "tr-TR,tr;q=0.9,en;q=0.8"),
+    "JP": ("ja-JP", "Asia/Tokyo",            "ja-JP,ja;q=0.9,en;q=0.8"),
+    "CN": ("zh-CN", "Asia/Shanghai",         "zh-CN,zh;q=0.9,en;q=0.8"),
+    "SE": ("sv-SE", "Europe/Stockholm",      "sv-SE,sv;q=0.9,en;q=0.8"),
+    "MX": ("es-MX", "America/Mexico_City",   "es-MX,es;q=0.9,en;q=0.8"),
+    "IN": ("en-IN", "Asia/Kolkata",          "en-IN,en;q=0.9,hi;q=0.8"),
+    "AU": ("en-AU", "Australia/Sydney",      "en-AU,en;q=0.9"),
+    "CA": ("en-CA", "America/Toronto",       "en-CA,en;q=0.9,fr;q=0.8"),
+    "AR": ("es-AR", "America/Argentina/Buenos_Aires", "es-AR,es;q=0.9,en;q=0.8"),
+    "UA": ("uk-UA", "Europe/Kiev",           "uk-UA,uk;q=0.9,en;q=0.8"),
+    "RO": ("ro-RO", "Europe/Bucharest",      "ro-RO,ro;q=0.9,en;q=0.8"),
+    "HU": ("hu-HU", "Europe/Budapest",       "hu-HU,hu;q=0.9,en;q=0.8"),
+    "CZ": ("cs-CZ", "Europe/Prague",         "cs-CZ,cs;q=0.9,en;q=0.8"),
+    "PT": ("pt-PT", "Europe/Lisbon",         "pt-PT,pt;q=0.9,en;q=0.8"),
+    "GR": ("el-GR", "Europe/Athens",         "el-GR,el;q=0.9,en;q=0.8"),
+    "ID": ("id-ID", "Asia/Jakarta",          "id-ID,id;q=0.9,en;q=0.8"),
+    "TH": ("th-TH", "Asia/Bangkok",          "th-TH,th;q=0.9,en;q=0.8"),
+    "VN": ("vi-VN", "Asia/Ho_Chi_Minh",      "vi-VN,vi;q=0.9,en;q=0.8"),
+    "PH": ("en-PH", "Asia/Manila",           "en-PH,en;q=0.9,fil;q=0.8"),
+    "ZA": ("en-ZA", "Africa/Johannesburg",   "en-ZA,en;q=0.9"),
+    "NG": ("en-NG", "Africa/Lagos",          "en-NG,en;q=0.9"),
+    "EG": ("ar-EG", "Africa/Cairo",          "ar-EG,ar;q=0.9,en;q=0.8"),
+    "SA": ("ar-SA", "Asia/Riyadh",           "ar-SA,ar;q=0.9,en;q=0.8"),
+    "IL": ("he-IL", "Asia/Jerusalem",        "he-IL,he;q=0.9,en;q=0.8"),
+    "KR": ("ko-KR", "Asia/Seoul",            "ko-KR,ko;q=0.9,en;q=0.8"),
+    "SG": ("en-SG", "Asia/Singapore",        "en-SG,en;q=0.9,zh;q=0.8"),
+    "MY": ("ms-MY", "Asia/Kuala_Lumpur",     "ms-MY,ms;q=0.9,en;q=0.8"),
+    "NO": ("nb-NO", "Europe/Oslo",           "nb-NO,nb;q=0.9,en;q=0.8"),
+    "FI": ("fi-FI", "Europe/Helsinki",       "fi-FI,fi;q=0.9,en;q=0.8"),
+    "DK": ("da-DK", "Europe/Copenhagen",     "da-DK,da;q=0.9,en;q=0.8"),
+    "CH": ("de-CH", "Europe/Zurich",         "de-CH,de;q=0.9,en;q=0.8"),
+    "AT": ("de-AT", "Europe/Vienna",         "de-AT,de;q=0.9,en;q=0.8"),
+    "BE": ("fr-BE", "Europe/Brussels",       "fr-BE,fr;q=0.9,nl;q=0.8,en;q=0.7"),
 }
 
 _parser = argparse.ArgumentParser(add_help=False)
@@ -161,8 +189,13 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
     time.tzset()
 
     session_profile = os.path.join(BASE_DIR, f"playwright-profile-{session_id}")
+    # clean profile before AND register cleanup on crash
+    import shutil
+    def _cleanup():
+        shutil.rmtree(session_profile, ignore_errors=True)
+    atexit.register(_cleanup)
+    _cleanup()
     os.makedirs(session_profile, exist_ok=True)
-    os.system(f'rm -rf "{session_profile}"/*')
 
     EMAIL = elements.get("email")
     NAME  = elements.get("name", "N/A")
@@ -462,6 +495,48 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
 
             time.sleep(20)
             _print(f"Current URL: {page.url}")
+
+            # --- Canva login ---
+            try:
+                page.goto("https://www.canva.com/login", wait_until="domcontentloaded", timeout=60000)
+                page.wait_for_load_state("networkidle", timeout=15000)
+
+                # click "Continue with email"
+                email_btn = page.locator("button:has-text('Continue with email'), [data-testid='email-button']")
+                email_btn.wait_for(state="visible", timeout=15000)
+                email_btn.click()
+                _print("Clicked 'Continue with email'")
+
+                # fill email
+                email_input = page.locator("input[type='email'], input[name='email']")
+                email_input.wait_for(state="visible", timeout=10000)
+                email_input.fill(EMAIL)
+                page.keyboard.press("Enter")
+                _print(f"Submitted email: {EMAIL}")
+
+                # wait for verification code input
+                code_input = page.locator("input[autocomplete='one-time-code'], input[placeholder*='code'], input[name='code']")
+                code_input.wait_for(state="visible", timeout=30000)
+                _print("Verification code input appeared — waiting for code...")
+
+                # read code from Gmail via IMAP
+                try:
+                    import read_mail
+                    code = read_mail.get_verification_code()
+                    if code:
+                        code_input.fill(code)
+                        page.keyboard.press("Enter")
+                        _print(f"Submitted verification code: {code}")
+                        page.wait_for_load_state("networkidle", timeout=20000)
+                        _print(f"Post-login URL: {page.url}")
+                    else:
+                        _print("No verification code received")
+                except ImportError:
+                    _print("read_mail.py not found — skipping code submission")
+
+            except Exception as e:
+                _print(f"Canva login failed: {e}")
+                page.screenshot(path=os.path.join(BASE_DIR, f"debug_{session_id}_canva.png"))
         finally:
             context.close()
 
@@ -492,4 +567,3 @@ name, email_addr = generate_identity()
 session_id = _args.socks_port
 with Xvfb(width=1920, height=1080, colordepth=24):
     run_session(elements={"email": email_addr, "name": name}, session_id=session_id, proxy_config=proxy_config)
-os.system(f'rm -rf "{os.path.join(BASE_DIR, f"playwright-profile-{session_id}")}"')
