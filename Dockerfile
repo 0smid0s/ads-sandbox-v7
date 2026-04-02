@@ -13,4 +13,4 @@ COPY . .
 ENV SOCKS_PORT=9050
 ENV CONTROL_PORT=9051
 
-CMD ["sh", "-c", "mkdir -p /logs && python3 -u thor_main.py -T >> /logs/sessions.log 2>&1"]
+CMD ["sh", "-c", "mkdir -p /logs && while true; do python3 -u thor_main.py -T >> /logs/sessions.log 2>&1; sleep 5; done"]
