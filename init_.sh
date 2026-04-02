@@ -2,9 +2,9 @@
 
 set -e
   #curl "https://raw.githubusercontent.com/0smid0s/ads-sandbox-v4/refs/heads/main/init_.sh" | sudo sh
-REPO_URL="https://github.com/0smid0s/ads-sandbox-v5.git"
+REPO_URL="https://github.com/0smid0s/ads-sandbox-v6.git"
 DIR_NAME="ads-sandbox*"
-DIR_NAME_2="ads-sandbox-v5"
+DIR_NAME_2="ads-sandbox-v6"
 
 # Wipe all Docker containers and images
 echo "Wiping all Docker containers and images..."
