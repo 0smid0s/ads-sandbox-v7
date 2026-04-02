@@ -6,7 +6,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y xvfb netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt && playwright install chromium
+# Use the playwright version already bundled in the image, don't upgrade it
+RUN pip install -r requirements.txt && \
+    BUNDLED=$(pip show playwright | grep ^Version | awk '{print $2}') && \
+    pip install "playwright==$BUNDLED" && \
+    playwright install chromium
 
 COPY . .
 

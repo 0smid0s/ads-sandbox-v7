@@ -2,4 +2,3 @@ requests
 requests[socks]
 faker
 xvfbwrapper
-playwright
