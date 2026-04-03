@@ -200,10 +200,26 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
     EMAIL = elements.get("email")
     NAME  = elements.get("name", "N/A")
 
+    # Playwright version → Chromium version mapping
+    PLAYWRIGHT_CHROMIUM_VERSION = {
+        "1.44": "124", "1.43": "123", "1.42": "122", "1.41": "121",
+        "1.40": "120", "1.39": "119",
+    }
+    _pw_ver = ".".join(__import__("playwright", fromlist=["__version__"]).__version__.split(".")[:2])
+    _chrome_ver = PLAYWRIGHT_CHROMIUM_VERSION.get(_pw_ver, "124")
+
+    # Desktop Windows Chrome UAs matched to actual Chromium version
+    DESKTOP_UAS = [
+        f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_chrome_ver}.0.0.0 Safari/537.36",
+        f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_chrome_ver}.0.0.0 Safari/537.36 Edg/{_chrome_ver}.0.0.0",
+        f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_chrome_ver}.0.0.0 Safari/537.36",
+        f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_chrome_ver}.0.0.0 Safari/537.36",
+    ]
+
     with sync_playwright() as p:
         browser_type    = p.chromium
         chosen_viewport = random.choice(VIEWPORTS)
-        chrome_ua       = user_agnt.get_ua(browser_type.name)
+        chrome_ua       = random.choice(DESKTOP_UAS)
 
         _print("\n" + "═" * 52)
         _print(f"  SESSION #{session_id}")
@@ -319,44 +335,141 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
             ]
             webgl_vendor, webgl_renderer = random.choice(webgl_vendors)
 
+            # Derive platform string from UA for consistency
+            if "Windows" in chrome_ua:
+                _platform = "Win32"
+                _ua_platform = "Windows"
+                _ua_platform_ver = "10.0.0"
+            elif "Macintosh" in chrome_ua:
+                _platform = "MacIntel"
+                _ua_platform = "macOS"
+                _ua_platform_ver = "13.0.0"
+            else:
+                _platform = "Linux x86_64"
+                _ua_platform = "Linux"
+                _ua_platform_ver = "5.15.0"
+
             page.add_init_script(f"""
                 // --- automation flags ---
                 Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
-                window.chrome = {{ runtime: {{}} }};
-                Object.defineProperty(navigator, 'plugins', {{ get: () => [1, 2, 3, 4, 5] }});
+
+                // --- window.chrome (realistic) ---
+                window.chrome = {{
+                    app: {{ isInstalled: false, InstallState: {{}}, RunningState: {{}} }},
+                    csi: () => ({{pageT: Date.now(), startE: Date.now(), tran: 15}}),
+                    loadTimes: () => ({{
+                        commitLoadTime: Date.now()/1000 - 0.4,
+                        connectionInfo: 'h2',
+                        finishDocumentLoadTime: Date.now()/1000 - 0.1,
+                        finishLoadTime: Date.now()/1000,
+                        firstPaintAfterLoadTime: 0,
+                        firstPaintTime: Date.now()/1000 - 0.3,
+                        navigationType: 'Other',
+                        npnNegotiatedProtocol: 'h2',
+                        requestTime: Date.now()/1000 - 0.5,
+                        startLoadTime: Date.now()/1000 - 0.5,
+                        wasAlternateProtocolAvailable: false,
+                        wasFetchedViaSpdy: true,
+                        wasNpnNegotiated: true,
+                    }}),
+                    runtime: {{
+                        OnInstalledReason: {{}},
+                        OnRestartRequiredReason: {{}},
+                        PlatformArch: {{}},
+                        PlatformNaclArch: {{}},
+                        PlatformOs: {{}},
+                        RequestUpdateCheckStatus: {{}},
+                        connect: () => {{}},
+                        sendMessage: () => {{}},
+                    }},
+                }};
+
+                // --- plugins (realistic PDF plugin) ---
+                const _fakeMime = {{ type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: null }};
+                const _fakePlugin = {{
+                    name: 'PDF Viewer', filename: 'internal-pdf-viewer',
+                    description: 'Portable Document Format',
+                    length: 1, 0: _fakeMime,
+                    item: (i) => i === 0 ? _fakeMime : null,
+                    namedItem: (n) => n === 'application/pdf' ? _fakeMime : null,
+                    [Symbol.iterator]: function*() {{ yield _fakeMime; }}
+                }};
+                _fakeMime.enabledPlugin = _fakePlugin;
+                const _pluginArray = {{
+                    length: 1, 0: _fakePlugin,
+                    item: (i) => i === 0 ? _fakePlugin : null,
+                    namedItem: (n) => n === 'PDF Viewer' ? _fakePlugin : null,
+                    refresh: () => {{}},
+                    [Symbol.iterator]: function*() {{ yield _fakePlugin; }}
+                }};
+                Object.defineProperty(navigator, 'plugins',   {{ get: () => _pluginArray }});
+                Object.defineProperty(navigator, 'mimeTypes', {{ get: () => ({{
+                    length: 1, 0: _fakeMime,
+                    item: (i) => i === 0 ? _fakeMime : null,
+                    namedItem: (n) => n === 'application/pdf' ? _fakeMime : null,
+                    [Symbol.iterator]: function*() {{ yield _fakeMime; }}
+                }})}});
+
+                // --- platform ---
+                Object.defineProperty(navigator, 'platform', {{ get: () => '{_platform}' }});
+
+                // --- userAgentData ---
+                Object.defineProperty(navigator, 'userAgentData', {{ get: () => ({{
+                    brands: [
+                        {{ brand: 'Chromium',       version: '{_chrome_ver}' }},
+                        {{ brand: 'Google Chrome',  version: '{_chrome_ver}' }},
+                        {{ brand: 'Not=A?Brand',    version: '99'            }},
+                    ],
+                    mobile: false,
+                    platform: '{_ua_platform}',
+                    getHighEntropyValues: (hints) => Promise.resolve({{
+                        architecture: 'x86',
+                        bitness: '64',
+                        brands: [
+                            {{ brand: 'Chromium',      version: '{_chrome_ver}' }},
+                            {{ brand: 'Google Chrome', version: '{_chrome_ver}' }},
+                            {{ brand: 'Not=A?Brand',   version: '99'            }},
+                        ],
+                        fullVersionList: [
+                            {{ brand: 'Chromium',      version: '{_chrome_ver}.0.0.0' }},
+                            {{ brand: 'Google Chrome', version: '{_chrome_ver}.0.0.0' }},
+                            {{ brand: 'Not=A?Brand',   version: '99.0.0.0'            }},
+                        ],
+                        mobile: false,
+                        model: '',
+                        platform: '{_ua_platform}',
+                        platformVersion: '{_ua_platform_ver}',
+                        uaFullVersion: '{_chrome_ver}.0.0.0',
+                        wow64: false,
+                    }}),
+                }})}});
 
                 // --- language / locale ---
                 Object.defineProperty(navigator, 'languages', {{ get: () => ['{lang_primary}', '{lang_base}'] }});
                 Object.defineProperty(navigator, 'language',  {{ get: () => '{lang_primary}' }});
-                Object.defineProperty(Intl, 'DateTimeFormat', {{
-                    value: new Proxy(Intl.DateTimeFormat, {{
-                        construct(target, args) {{
-                            if (!args[0]) args[0] = '{locale}';
-                            return new target(...args);
-                        }}
-                    }})
-                }});
 
                 // --- window geometry ---
-                Object.defineProperty(window, 'outerHeight', {{ get: () => window.innerHeight }});
+                Object.defineProperty(window, 'outerHeight', {{ get: () => window.innerHeight + 85 }});
                 Object.defineProperty(window, 'outerWidth',  {{ get: () => window.innerWidth  }});
                 Object.defineProperty(screen, 'width',       {{ get: () => {chosen_viewport['width']}  }});
                 Object.defineProperty(screen, 'height',      {{ get: () => {chosen_viewport['height']} }});
                 Object.defineProperty(screen, 'availWidth',  {{ get: () => {chosen_viewport['width']}  }});
                 Object.defineProperty(screen, 'availHeight', {{ get: () => {chosen_viewport['height']} }});
+                Object.defineProperty(screen, 'colorDepth',  {{ get: () => 24 }});
+                Object.defineProperty(screen, 'pixelDepth',  {{ get: () => 24 }});
 
                 // --- hardware ---
                 Object.defineProperty(navigator, 'hardwareConcurrency', {{ get: () => {hw_concurrency} }});
                 Object.defineProperty(navigator, 'deviceMemory',        {{ get: () => {device_memory}  }});
 
-                // --- canvas noise ---
+                // --- canvas noise (pixel-level) ---
                 const _toDataURL = HTMLCanvasElement.prototype.toDataURL;
                 HTMLCanvasElement.prototype.toDataURL = function(...args) {{
                     const ctx = this.getContext('2d');
                     if (ctx) {{
-                        const noise = (Math.random() - 0.5) * 0.01 + {canvas_salt} / 100000;
-                        ctx.fillStyle = `rgba(255,255,255,${{Math.abs(noise)}})`;
-                        ctx.fillRect(0, 0, 1, 1);
+                        const img = ctx.getImageData(0, 0, this.width || 1, this.height || 1);
+                        img.data[0] = img.data[0] ^ {canvas_salt};
+                        ctx.putImageData(img, 0, 0);
                     }}
                     return _toDataURL.apply(this, args);
                 }};
@@ -364,7 +477,7 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
                 CanvasRenderingContext2D.prototype.getImageData = function(...args) {{
                     const data = _getImageData.apply(this, args);
                     for (let i = 0; i < data.data.length; i += 100) {{
-                        data.data[i] = data.data[i] ^ (Math.random() * 2 | 0);
+                        data.data[i] = data.data[i] ^ {canvas_salt};
                     }}
                     return data;
                 }};
@@ -395,8 +508,16 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
                     return analyser;
                 }};
 
-                // --- Timezone offset ---
-                Date.prototype.getTimezoneOffset = () => {tz_offset};
+                // --- Timezone offset (DST-aware via real API) ---
+                const _origGetTZOffset = Date.prototype.getTimezoneOffset;
+                Date.prototype.getTimezoneOffset = function() {{
+                    const jan = new Date(this.getFullYear(), 0, 1).getTime();
+                    const jul = new Date(this.getFullYear(), 6, 1).getTime();
+                    const stdOffset = {tz_offset};
+                    const dstOffset = stdOffset - 60;
+                    const isDST = this.getTime() < Math.max(jan, jul) && this.getTime() > Math.min(jan, jul);
+                    return isDST ? dstOffset : stdOffset;
+                }};
 
                 // --- Battery ---
                 navigator.getBattery = () => Promise.resolve({{
@@ -429,9 +550,6 @@ def run_session(elements: dict, session_id: int = 0, proxy_config: dict = None):
                         {{ kind: 'videoinput',  label: '', deviceId: 'default', groupId: 'default' }},
                     ]);
                 }}
-
-                // --- mimeTypes (proper array-like) ---
-                Object.defineProperty(navigator, 'mimeTypes', {{ get: () => {{ return {{ length: 2, 0: {{ type: 'application/pdf' }}, 1: {{ type: 'application/x-google-chrome-pdf' }} }}; }} }});
             """)
 
             page.goto(f"https://mohmal.eu.org/?{EMAIL}", wait_until="domcontentloaded", timeout=60000)
