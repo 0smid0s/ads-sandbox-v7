@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y xvfb netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt && python -m playwright install chromium
+RUN pip install -r requirements.txt && python3 -m playwright install chromium
 
 COPY . .
 
