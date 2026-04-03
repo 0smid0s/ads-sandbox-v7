@@ -1,4 +1,5 @@
 ARG PLAYWRIGHT_TAG=v1.44.0-jammy
+ARG PLAYWRIGHT_VERSION=1.44.0
 FROM mcr.microsoft.com/playwright/python:${PLAYWRIGHT_TAG}
 
 WORKDIR /app
@@ -6,7 +7,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y xvfb netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt && python3 -m playwright install chromium
+ARG PLAYWRIGHT_VERSION
+RUN pip install -r requirements.txt playwright==${PLAYWRIGHT_VERSION} && python3 -m playwright install chromium
 
 COPY . .
 

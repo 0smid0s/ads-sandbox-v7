@@ -28,6 +28,10 @@ git clone "$REPO_URL"
 echo "Entering directory..."
 cd "$DIR_NAME_2" || { echo "Failed to enter directory"; exit 1; }
 
+# Login to quay.io
+echo "Logging in to quay.io..."
+docker login quay.io -u "${QUAY_USER}" -p "${QUAY_PASS}"
+
 # Pull images from quay.io
 echo "Pulling images from quay.io..."
 docker pull quay.io/mylastres0rt05/tor-proxy:latest
