@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-import socket, requests, os
+import socket, requests, os, time, threading, random
 
 app = Flask(__name__)
 
@@ -20,15 +20,34 @@ def tor_cmd(cmd: bytes) -> tuple:
     except Exception as e:
         return False, str(e)
 
+def _new_circuit():
+    # random jitter before rotating to break timing correlation
+    time.sleep(random.uniform(0.5, 3.0))
+    tor_cmd(b"SIGNAL NEWNYM\r\n")
+
+def _auto_rotate():
+    """Rotate circuit every 90-150s to avoid long-lived circuit fingerprinting."""
+    while True:
+        time.sleep(random.uniform(90, 150))
+        _new_circuit()
+
+# start background rotation thread
+threading.Thread(target=_auto_rotate, daemon=True).start()
+
 @app.route("/reset-ip")
 def reset_ip():
-    ok, detail = tor_cmd(b"SIGNAL NEWNYM\r\n")
-    return jsonify({"status": "ok" if ok else "error", "detail": detail})
+    _new_circuit()
+    return jsonify({"status": "ok"})
 
 @app.route("/ip")
 def get_ip():
     try:
-        proxies = {"http": f"socks5h://127.0.0.1:{SOCKS_PORT}", "https": f"socks5h://127.0.0.1:{SOCKS_PORT}"}
+        proxies = {
+            "http":  f"socks5h://127.0.0.1:{SOCKS_PORT}",
+            "https": f"socks5h://127.0.0.1:{SOCKS_PORT}",
+        }
+        # random delay to prevent timing fingerprint on IP checks
+        time.sleep(random.uniform(0.1, 0.8))
         ip = requests.get("https://api.ipify.org", proxies=proxies, timeout=15).text
         return jsonify({"ip": ip})
     except Exception as e:
