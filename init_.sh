@@ -90,6 +90,9 @@ for t in threads:
     t.join()
 EOF
 
-# Run orchestrator
+# Run orchestrator in background then tail logs
 echo "Starting orchestrator..."
-python3 /usr/local/bin/orchestrator.py
+python3 /usr/local/bin/orchestrator.py &
+echo "Tailing logs (ctrl+c to stop)..."
+sleep 5
+tail -f /home/codespace/thor-logs/sessions.log
