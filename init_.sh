@@ -38,8 +38,7 @@ docker run -d --name tor-9058 -e SOCKS_PORT=9058 -e CONTROL_PORT=9059 -e API_POR
 
 # Write orchestrator
 cat > /usr/local/bin/orchestrator.py << 'EOF'
-import subprocess, time, random, os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import subprocess, time, os, threading
 
 SESSIONS = [
     {"socks_port": 9050, "api_port": 5000, "image": "thor-session:v1.44"},
@@ -49,35 +48,46 @@ SESSIONS = [
     {"socks_port": 9058, "api_port": 5004, "image": "thor-session:v1.40"},
 ]
 
-MAX_RETRIES = 3
-
-def run_session(s, attempt=1):
+def start_container(s):
     port = s["socks_port"]
-    name = f"session-{port}-{int(time.time())}"
+    name = f"session-{port}"
+    # remove any existing container with same name
+    subprocess.run(["docker", "rm", "-f", name], capture_output=True)
     cmd = [
-        "docker", "run", "--rm", "--name", name, "--network", "host",
+        "docker", "run", "-d", "--name", name, "--network", "host",
         "-e", f"SOCKS_PORT={port}", "-e", f"API_PORT={s['api_port']}",
         "-v", f"{os.path.expanduser('~')}/thor-logs:/logs",
-        s["image"], "python", "thor_main.py", "--tor", f"--socks-port={port}",
+        s["image"],
     ]
-    print(f"[{port}] attempt {attempt} → {s['image']}")
-    ok = subprocess.run(cmd).returncode == 0
-    print(f"[{port}] {'✅ done' if ok else '❌ failed'}")
-    return ok
+    subprocess.run(cmd, check=True)
+    print(f"[{port}] ✅ started {name}")
 
-def run_with_retry(s):
-    for attempt in range(1, MAX_RETRIES + 1):
-        if run_session(s, attempt):
-            return
-        if attempt < MAX_RETRIES:
-            time.sleep(random.uniform(5, 15))
-    print(f"[{s['socks_port']}] gave up after {MAX_RETRIES} attempts")
+def watch(s):
+    port = s["socks_port"]
+    name = f"session-{port}"
+    while True:
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            capture_output=True, text=True
+        )
+        if result.stdout.strip() != "true":
+            print(f"[{port}] ⚠ container down — restarting...")
+            start_container(s)
+        time.sleep(15)
 
-with ThreadPoolExecutor(max_workers=len(SESSIONS)) as ex:
-    for f in as_completed([ex.submit(run_with_retry, s) for s in SESSIONS]):
-        f.result()
+# Start all containers then watch them
+for s in SESSIONS:
+    start_container(s)
+
+threads = [threading.Thread(target=watch, args=(s,), daemon=True) for s in SESSIONS]
+for t in threads:
+    t.start()
+
+print("All sessions running. Watching for crashes...")
+for t in threads:
+    t.join()
 EOF
 
-# Run sessions
-echo "Running sessions..."
+# Run orchestrator
+echo "Starting orchestrator..."
 python3 /usr/local/bin/orchestrator.py
